@@ -7,6 +7,7 @@ import {
   getMenuItemById,
   updateMenuItem,
   updateManyPrices,
+  bulkPriceAdjustment,
   deleteMenuItem,
   deleteRestaurantMenuItems
 } from '../controllers/menuItems.controller.js';
@@ -15,6 +16,7 @@ const router = express.Router();
 
 // Create
 router.post('/', createMenuItem);
+router.post('/bulk', createManyMenuItems);
 
 // Read
 router.get('/', getAllMenuItems);
@@ -24,6 +26,7 @@ router.get('/:id', getMenuItemById);
 // Update
 router.put('/:id', updateMenuItem);
 router.patch('/restaurant/:restaurantId/price', updateManyPrices);
+router.post('/bulk-price-adjustment', bulkPriceAdjustment);
 
 // Delete
 router.delete('/restaurant/:restaurantId', deleteRestaurantMenuItems);

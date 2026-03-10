@@ -9,9 +9,7 @@ import {
   getOrdersCountByStatus,
   getDistinctCities,
   getDistinctCategories,
-  getUsersCountByRole,
-  getTopDishesByRevenue,
-  getOrderStatusDistribution
+  getUsersCountByRole
 } from '../controllers/analytics.controller.js';
 
 const router = express.Router();
@@ -19,11 +17,9 @@ const router = express.Router();
 // Complex aggregations
 router.get('/restaurants/top-rated', getTopRatedRestaurants);
 router.get('/menu-items/top-sold', getTopSoldMenuItems);
-router.get('/menu-items/top-by-revenue', getTopDishesByRevenue); // new: revenue-based top dishes
 router.get('/users/avg-spend', getUserAverageSpending);
 router.get('/restaurants/monthly-revenue', getMonthlyRevenue);
 router.get('/reviews/rating-distribution', getRatingDistribution);
-router.get('/orders/status-distribution', getOrderStatusDistribution); // new: order status breakdown
 
 // Simple aggregations
 router.get('/orders/count', getOrdersCount);
