@@ -22,6 +22,26 @@ export async function createMenuItem(req, res) {
   }
 }
 
+// POST /api/menu-items/bulk — Create many items
+export async function createManyMenuItems(req, res) {
+  try {
+    const db = getDB();
+    const items = req.body.items.map(item => ({
+      ...item,
+      restaurantId: new ObjectId(item.restaurantId),
+      available: item.available !== false,
+      createdAt: new Date()
+    }));
+    
+    const result = await db.collection('menu_items').insertMany(items);
+    res.status(201).json({ 
+      message: 'Menu items created successfully',
+      insertedCount: result.insertedCount 
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
 
 // GET /api/menu-items — List with filters, projection
 export async function getAllMenuItems(req, res) {
@@ -213,3 +233,110 @@ export async function deleteRestaurantMenuItems(req, res) {
   }
 }
 
+// POST /api/menu-items/bulk-price-adjustment — BulkWrite with mixed operations
+export async function bulkPriceAdjustment(req, res) {
+  try {
+    const db = getDB();
+    const { 
+      restaurantId, 
+      categoryAdjustments = [], 
+      specialItemUpdate,
+      discontinuedCutoffDays = 30 
+    } = req.body;
+
+    if (!restaurantId) {
+      return res.status(400).json({ error: 'restaurantId is required' });
+    }
+
+    // Convert restaurantId string to ObjectId
+    const restaurantObjId = new ObjectId(restaurantId);
+
+    // Calculate cutoff date for discontinued items
+    const cutoffDate = new Date(Date.now() - discontinuedCutoffDays * 24 * 60 * 60 * 1000);
+
+    /**
+     * BULKWRITE OPERATIONS (Extra Credit)
+     * 
+     * Real-world scenario: A restaurant performs a coordinated menu catalog update:
+     * 1. Apply percentage-based price increases to specific categories (e.g. 8% on beverages)
+     * 2. Set fixed prices on daily specials or promotional items
+     * 3. Clean up discontinued items that have been unavailable for extended periods
+     * 
+     * bulkWrite executes all operations in a single round-trip to the database,
+     * improving performance compared to separate updateMany/updateOne/deleteMany calls.
+     */
+    const bulkOps = [];
+
+    // OPERATION TYPE 1: updateMany — Apply price multiplier to categories
+    categoryAdjustments.forEach(({ category, multiplier }) => {
+      if (category && multiplier) {
+        bulkOps.push({
+          updateMany: {
+            filter: { 
+              restaurantId: restaurantObjId,
+              category: category,
+              available: true
+            },
+            update: [
+              {
+                $set: {
+                  price: { $multiply: ['$price', multiplier] },
+                  updatedAt: new Date()
+                }
+              }
+            ]
+          }
+        });
+      }
+    });
+
+    // OPERATION TYPE 2: updateOne — Set specific price on named item
+    if (specialItemUpdate && specialItemUpdate.name && specialItemUpdate.newPrice) {
+      bulkOps.push({
+        updateOne: {
+          filter: { 
+            restaurantId: restaurantObjId,
+            name: specialItemUpdate.name
+          },
+          update: {
+            $set: {
+              price: specialItemUpdate.newPrice,
+              updatedAt: new Date()
+            }
+          }
+        }
+      });
+    }
+
+    // OPERATION TYPE 3: deleteMany — Remove old discontinued items
+    bulkOps.push({
+      deleteMany: {
+        filter: {
+          restaurantId: restaurantObjId,
+          available: false,
+          createdAt: { $lt: cutoffDate }
+        }
+      }
+    });
+
+    // Execute bulkWrite only if there are operations
+    if (bulkOps.length === 0) {
+      return res.status(400).json({ 
+        error: 'No operations to execute. Provide categoryAdjustments or specialItemUpdate.' 
+      });
+    }
+
+    const result = await db.collection('menu_items').bulkWrite(bulkOps, { ordered: false });
+
+    res.json({
+      message: 'Bulk price adjustment completed successfully',
+      matchedCount: result.matchedCount || 0,
+      modifiedCount: result.modifiedCount || 0,
+      deletedCount: result.deletedCount || 0,
+      upsertedCount: result.upsertedCount || 0,
+      operationsExecuted: bulkOps.length
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
